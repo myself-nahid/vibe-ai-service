@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  milvus:
+    image: milvusdb/milvus:v2.3.0
+    ports:
+      - "19530:19530"
+    command: ["milvus", "run", "standalone"]
+
+  # The FastAPI Server
+  api-service:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      - kafka
+      - milvus
+      - redis
+
+  # The Background Video Processor
+  worker-service:
+    build: .
+    command: python app/workers/categorization_worker.py
+    env_file: .env
+    depends_on:
+      - kafka
+      - milvus
