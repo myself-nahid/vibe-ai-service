@@ -14,11 +14,25 @@ class RecommendationService:
 
     def generate_feed(self, user_id: str, limit: int = 20) -> list:
         user_vector = redis_db.get_user_vector(user_id)
-        
         if not user_vector:
-            # Fallback if user skipped onboarding: Neutral vector or random
-            user_vector = [0.0] * 1536 
+            print(f"DEBUG: No vector found for user {user_id}")
+            return []
 
-        candidates = milvus_db.search_videos(user_vector, top_k=limit * 2)
-        candidates.sort(key=lambda x: x["score"], reverse=True)
-        return [c["video_id"] for c in candidates[:limit]]
+        # 1. Search Milvus
+        candidates = milvus_db.search_videos(user_vector, top_k=50)
+        
+        # 2. Filter by Threshold (Lower it to 0.1 to see everything)
+        filtered_ids = []
+        for c in candidates:
+            # Add this print to see the actual scores in your terminal!
+            print(f"DEBUG: Video {c['video_id']} score: {c['score']}")
+            
+            if c["score"] > 0.1:  # Lowered from 0.7 to 0.1
+                filtered_ids.append(c["video_id"])
+
+        filtered_ids = [
+            c["video_id"] for c in candidates 
+            if c["score"] > 0.35 
+        ]
+        
+        return filtered_ids[:limit]

@@ -41,10 +41,10 @@ class MilvusDB:
         self.client.load_collection(collection_name=self.collection_name)
 
     def insert_video(self, video_id: str, category: str, embedding: list):
-        data = [
-            {"video_id": video_id, "category": category, "embedding": embedding}
-        ]
+        data = [{"video_id": video_id, "category": category, "embedding": embedding}]
         self.client.insert(collection_name=self.collection_name, data=data)
+        # Add this line only for testing/debugging to update the count instantly:
+        self.client.flush(collection_name=self.collection_name)
 
     def search_videos(self, user_embedding: list, top_k: int = 50) -> list:
         search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}

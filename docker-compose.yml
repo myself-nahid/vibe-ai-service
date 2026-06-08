@@ -15,13 +15,14 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # internal access via kafka:29092, external access via localhost:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
-      test: ["CMD", "cub", "kafka-ready", "-b", "localhost:9092", "1", "20"]
+      # Simplified healthcheck that works more reliably on Windows
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,7 +71,7 @@ services:
   # 5. VIBE AI Microservices
   api-service:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     env_file: .env
@@ -89,6 +90,9 @@ services:
     build: .
     command: python app/workers/categorization_worker.py
     env_file: .env
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - PYTHONUNBUFFERED=1
@@ -97,3 +101,13 @@ services:
         condition: service_healthy
       milvus:
         condition: service_started
+
+  attu:
+    image: zilliz/attu:latest
+    container_name: vibe-attu
+    ports:
+      - "8001:3000" # Changed internal port to 3000
+    environment:
+      MILVUS_URL: milvus:19530
+    depends_on:
+      - milvus
