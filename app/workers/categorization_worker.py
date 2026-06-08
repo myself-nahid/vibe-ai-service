@@ -1,5 +1,6 @@
 import json
 import os
+import time  
 from kafka import KafkaConsumer, KafkaProducer
 from app.ai_models.categorizer import OpenAIAIModel
 from app.services.video_processor import download_video_temp
@@ -10,16 +11,33 @@ def start_worker():
     ai_model = OpenAIAIModel()
     milvus_db.connect()
 
-    consumer = KafkaConsumer(
-        settings.KAFKA_TOPIC_UPLOADED,
-        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-        value_deserializer=lambda v: json.loads(v.decode('utf-8'))
-    )
-    producer = KafkaProducer(
-        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
+    consumer = None
+    producer = None
+    retries = 6
     
+    # KAFKA RETRY LOGIC 
+    for i in range(retries):
+        try:
+            print(f"Connecting to Kafka (Attempt {i+1}/{retries})...")
+            consumer = KafkaConsumer(
+                settings.KAFKA_TOPIC_UPLOADED,
+                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+                value_deserializer=lambda v: json.loads(v.decode('utf-8'))
+            )
+            producer = KafkaProducer(
+                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+                value_serializer=lambda v: json.dumps(v).encode('utf-8')
+            )
+            print("Successfully connected to Kafka!")
+            break
+        except Exception as e:
+            print(f"Kafka not ready yet: {e}. Waiting 5 seconds...")
+            time.sleep(5)
+            
+    if not consumer or not producer:
+        print("Fatal: Could not connect to Kafka after multiple retries.")
+        return
+
     print("Worker Started: Listening for new videos...")
     
     for message in consumer:
